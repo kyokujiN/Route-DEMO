@@ -6,13 +6,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; display:flex; height:100vh; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; display:flex; height:100vh; flex-direction: row; }
     #left { width: 380px; padding: 12px; box-sizing:border-box; overflow:auto; border-right:1px solid #ddd; }
     #map { flex:1; }
     input, textarea { width:100%; margin-top:4px; margin-bottom:8px; box-sizing:border-box; padding:6px; }
     button { padding:8px 12px; margin-top:4px; }
     .small { font-size: 13px; color:#555; }
     ol { padding-left: 18px; }
+    label.checkbox-inline { display: flex; align-items: center; margin-bottom: 8px; }
+    label.checkbox-inline input { margin-right: 6px; }
+
+    /* Responsywność dla telefonów */
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      #left { width: 100%; border-right: none; border-bottom:1px solid #ddd; height: auto; }
+      #map { height: 60vh; }
+    }
   </style>
 </head>
 <body>
@@ -29,7 +38,7 @@
     <button id="add-address">Dodaj adresy do listy</button>
     <ol id="address-list"></ol>
 
-    <label><input type="checkbox" id="returnDepot"> Powrót do depo</label><br/>
+    <label class="checkbox-inline"><input type="checkbox" id="returnDepot">Powrót do depo</label>
 
     <button id="optimize">Optymalizuj trasę</button>
 
@@ -158,11 +167,11 @@ async function drawRoute(){
       const url = `https://router.project-osrm.org/route/v1/driving/${route[i].lon},${route[i].lat};${route[i+1].lon},${route[i+1].lat}?overview=full&geometries=geojson`;
       const res = await fetch(url);
       const data = await res.json();
-      let segment = [[route[i].lat, route[i].lon],[route[i+1].lat, route[i+1].lon]];
+      let segment = [[route[i].lat, route[i].lon],[route[i+1].lat,route[i+1].lon]];
       if(data.routes && data.routes.length>0) segment = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
       fullLatLngs = fullLatLngs.concat(segment);
     }catch{
-      fullLatLngs.push([route[i].lat, route[i].lon],[route[i+1].lat, route[i+1].lon]);
+      fullLatLngs.push([route[i].lat, route[i].lon],[route[i+1].lat,route[i+1].lon]);
     }
   }
 
