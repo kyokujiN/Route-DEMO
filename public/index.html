@@ -44,6 +44,9 @@
 
     <h4>Wynik:</h4>
     <div id="result"></div>
+
+    <h4>Trasa:</h4>
+    <ol id="route-list"></ol>
   </div>
 
   <div id="map"></div>
@@ -204,7 +207,16 @@ async function drawRoute(){
 
   // Całkowita odległość
   let totalMeters=0;
-  for(let i=0;i<route.length-1;i++) totalMeters+=distance(route[i],route[i+1]);
+  let routeList = document.getElementById('route-list');
+  routeList.innerHTML = ''; // Czyszczenie poprzednich danych
+
+  for(let i=0;i<route.length-1;i++){
+    totalMeters += distance(route[i], route[i+1]);
+    let li = document.createElement('li');
+    li.textContent = `${i+1}. ${route[i].address} → ${route[i+1].address} (${(distance(route[i], route[i+1])/1000).toFixed(2)} km)`;
+    routeList.appendChild(li);
+  }
+
   document.getElementById('result').innerHTML=`<b>Całkowita odległość:</b> ${(totalMeters/1000).toFixed(2)} km`;
 }
 
