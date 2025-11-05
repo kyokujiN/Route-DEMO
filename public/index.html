@@ -92,13 +92,20 @@ document.getElementById('go').addEventListener('click', async () => {
 
     routeLayer = L.polyline(fullLatLngs, { color: 'blue', weight: 4 }).addTo(map);
 
-    // markery
-    const markers = [];
-    data.ordered.forEach((p, i) => {
-      const m = L.marker([p.lat, p.lon]).bindPopup(`${i+1}. ${p.address}`);
-      m.addTo(map);
-      markers.push(m);
-    });
+// markery z numerami w kolejności
+const markers = [];
+data.ordered.forEach((p, i) => {
+  const m = L.marker([p.lat, p.lon], {
+    icon: L.divIcon({
+      className: 'custom-div-icon',
+      html: `<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i+1}</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    })
+  }).bindPopup(`${i+1}. ${p.address}${p.isDepot ? ' — depo' : ''}`);
+  m.addTo(map);
+  markers.push(m);
+});
 
     const group = L.featureGroup([routeLayer, ...markers]);
     map.fitBounds(group.getBounds().pad(0.2));
