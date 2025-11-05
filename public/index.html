@@ -6,96 +6,57 @@
   <title>Route Optimizer</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    /* Ustawienia kontenera, który będzie trzymał formularz po lewej i mapę po prawej */
     .container {
-      display: flex; /* Flexbox, żeby elementy były obok siebie */
-      height: 100vh; /* Cała wysokość ekranu */
-      flex-wrap: wrap; /* Pozwala na zawijanie elementów na małych ekranach */
+      display: flex;
+      height: 100vh;
+      flex-wrap: wrap;
     }
-
-    /* Styl formularza po lewej stronie */
     #address-form-container {
-      width: 300px; /* Szerokość formularza (możesz dostosować) */
+      width: 300px;
       padding: 20px;
-      overflow-y: auto; /* Możliwość przewijania, gdy formularz będzie długi */
-      background-color: #f7f7f7; /* Jasne tło dla formularza */
+      background-color: #f7f7f7;
       box-sizing: border-box;
     }
-
-    /* Styl mapy po prawej stronie */
     #map {
-      flex: 1; /* Mapa będzie wypełniać resztę ekranu */
-      height: 100vh; /* Mapa zajmie całą wysokość ekranu */
+      flex: 1;
+      height: 100vh;
     }
-
-    /* Dodatkowy styl dla sekcji trasy */
-    #route-details {
-      padding: 10px;
-    }
-
-    .address-form {
-      margin-bottom: 15px;
-    }
-
     #address-list {
       margin-top: 20px;
     }
-
-    /* Styl przycisku do optymalizacji */
     #optimize-btn {
       margin-top: 10px;
     }
-
-    /* Responsywność: na urządzeniach mobilnych formularz będzie nad mapą */
     @media (max-width: 768px) {
       .container {
-        flex-direction: column; /* Zawijamy formularz nad mapę */
+        flex-direction: column;
       }
-
       #address-form-container {
-        width: 100%; /* Formularz zajmie całą szerokość ekranu */
-        height: auto; /* Dostosowanie wysokości */
+        width: 100%;
       }
-
       #map {
-        height: 400px; /* Zmniejszamy wysokość mapy na urządzeniach mobilnych */
-      }
-    }
-
-    /* Mniejsze dostosowanie na naprawdę małych ekranach */
-    @media (max-width: 480px) {
-      #map {
-        height: 300px; /* Jeszcze mniejsza mapa na bardzo małych ekranach */
+        height: 400px;
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- Kontener z flexboxem, gdzie formularz jest po lewej, a mapa po prawej -->
   <div class="container">
     <div id="address-form-container">
       <h3>Address Form</h3>
-
-      <!-- Formularz do dodawania adresów -->
       <div class="address-form">
         <input type="text" id="address-input" placeholder="Enter address" />
         <button id="add-address-btn">Add Address</button>
       </div>
-
-      <!-- Lista dodanych adresów -->
       <div id="address-list"></div>
-
-      <!-- Przycisk do optymalizacji trasy -->
       <button id="optimize-btn" style="display:none;">Optimize Route</button>
-
       <div id="route-details">
         <h3>Route Details</h3>
         <p>Total Distance: <span id="total-distance">0 km</span></p>
       </div>
     </div>
 
-    <!-- Mapa po prawej stronie -->
     <div id="map"></div>
   </div>
 
@@ -106,92 +67,16 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     const depotAddress = "Industrigata 14B, Haugesund";
+    const depotCoordinates = [59.4139, 5.2689]; // Współrzędne depozytu
     let addresses = [];
     let markers = [];
 
     // Dodanie markera dla depozytu
-    const depotMarker = L.marker([59.4139, 5.2689]).addTo(map);
+    const depotMarker = L.marker(depotCoordinates).addTo(map);
     depotMarker.bindPopup("Depot: " + depotAddress).openPopup();
 
-    // Obsługa dodawania nowych adresów
-    document.getElementById('add-address-btn').addEventListener('click', () => {
-      const addressInput = document.getElementById('address-input');
-      const newAddress = addressInput.value.trim();
-
-      if (newAddress) {
-        addresses.push(newAddress);
-
-        // Zaktualizowanie listy adresów na stronie
-        const addressListDiv = document.getElementById('address-list');
-        const addressDiv = document.createElement('div');
-        addressDiv.textContent = newAddress;
-
-        // Dodanie przycisku do usuwania adresu
-        const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = "Delete";
-        deleteBtn.style.marginLeft = "10px";
-        deleteBtn.addEventListener('click', () => {
-          // Usunięcie adresu z listy i z mapy
-          addresses = addresses.filter(address => address !== newAddress);
-          markers.forEach(marker => {
-            if (marker._popup._content.includes(newAddress)) {
-              map.removeLayer(marker);
-            }
-          });
-          addressDiv.remove();
-          updateOptimizeButton();
-        });
-
-        addressDiv.appendChild(deleteBtn);
-        addressListDiv.appendChild(addressDiv);
-
-        // Wyczyść pole tekstowe
-        addressInput.value = '';
-
-        // Dodaj marker na mapie (dla uproszczenia: nie dodajemy dokładnych współrzędnych w tym przypadku)
-        const marker = L.marker([59.4139, 5.2689]).addTo(map);  // Przykładowe współrzędne
-        marker.bindPopup(newAddress);
-        markers.push(marker);
-
-        updateOptimizeButton();
-      }
-    });
-
-    // Funkcja, aby pokazać lub ukryć przycisk optymalizacji
-    function updateOptimizeButton() {
-      if (addresses.length > 0) {
-        document.getElementById('optimize-btn').style.display = 'block';
-      } else {
-        document.getElementById('optimize-btn').style.display = 'none';
-      }
-    }
-
-    // Optymalizacja trasy po kliknięciu przycisku
-    document.getElementById('optimize-btn').addEventListener('click', async () => {
-      const response = await fetch('/optimize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addresses })
-      });
+    // Funkcja geokodująca adresy
+    async function geocodeAddress(address) {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`);
       const data = await response.json();
-
-      const route = data.route;
-      const totalDistance = data.totalDistanceMeters / 1000;  // Konwersja metrów na kilometry
-
-      // Zaktualizowanie informacji o trasie
-      document.getElementById('total-distance').textContent = totalDistance.toFixed(2) + " km";
-
-      // Dodanie markerów i linii dla zoptymalizowanej trasy
-      let latLngs = [];
-      route.forEach((loc, index) => {
-        latLngs.push([parseFloat(loc.lat), parseFloat(loc.lon)]);
-        L.marker([loc.lat, loc.lon]).addTo(map)
-          .bindPopup(`Stop ${index + 1}: ${loc.address}`);
-      });
-
-      // Narysowanie linii na mapie
-      L.polyline(latLngs, { color: 'blue' }).addTo(map);
-    });
-  </script>
-</body>
-</html>
+      if (data && data.length >
