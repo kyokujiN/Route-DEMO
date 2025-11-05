@@ -9,8 +9,8 @@
     body { font-family: Arial, sans-serif; margin: 0; padding: 0; display:flex; height:100vh; }
     #left { width: 380px; padding: 12px; box-sizing:border-box; overflow:auto; border-right:1px solid #ddd; }
     #map { flex:1; }
-    textarea { width:100%; height:160px; }
-    button { padding:10px 14px; margin-top:8px; }
+    input, textarea { width:100%; margin-top:4px; margin-bottom:8px; box-sizing:border-box; padding:6px; }
+    button { padding:8px 12px; margin-top:4px; }
     .small { font-size: 13px; color:#555; }
     ol { padding-left: 18px; }
   </style>
@@ -18,104 +18,157 @@
 <body>
   <div id="left">
     <h3>Route Optimizer — demo</h3>
-    <p class="small">Wklej po jednym adresie w wierszu. (Dla testów używamy darmowego geokodera Nominatim.)</p>
+    <p class="small">Wpisz adresy po jednym w wierszu. Depot jest ustawiony domyślnie na Haugesund.</p>
 
-    <label>Depo / start (opcjonalnie):</label><br/>
-   <input type="text" id="depot" value="Industrigata 14B, Haugesund" />
+    <label>Depot / start:</label>
+    <input type="text" id="depot" value="Industrigata 14B, Haugesund" />
 
-    <label>Adresy (po jednym w wierszu):</label><br/>
-    <textarea id="addresses" placeholder="ul. Piękna 1, Warszawa\nul. Zielona 2, Warszawa"></textarea><br/>
+    <label>Adresy:</label>
+    <textarea id="addresses" placeholder="Adres 1\nAdres 2\nAdres 3"></textarea>
 
-    <label><input type="checkbox" id="returnToDepot" /> Powrót do depo (jeśli podano)</label><br/>
+    <button id="add-address">Dodaj adresy do listy</button>
+    <ol id="address-list"></ol>
 
-    <button id="go">Optymalizuj trasę</button>
+    <label><input type="checkbox" id="returnDepot"> Powrót do depo</label><br/>
+
+    <button id="optimize">Optymalizuj trasę</button>
 
     <h4>Wynik:</h4>
     <div id="result"></div>
   </div>
+
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-// Haugesund: lat 59.4139, lon 5.2689
 const map = L.map('map').setView([59.4139, 5.2689], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19,
   attribution: '&copy; OSM'
 }).addTo(map);
 
+let markers = [];
 let routeLayer;
+let locations = []; // {address, lat, lon, isDepot}
 
-async function getRouteSegment(p1, p2) {
-  const url = `http://router.project-osrm.org/route/v1/driving/${p1.lon},${p1.lat};${p2.lon},${p2.lat}?overview=full&geometries=geojson`;
-  const res = await fetch(url);
+// Funkcja geokodująca przez Nominatim
+async function geocode(address) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'RouteDemo/1.0' } });
   const data = await res.json();
-  if (!data.routes || data.routes.length === 0) return [[p1.lat, p1.lon], [p2.lat, p2.lon]]; // fallback linia prosta
-  return data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+  if (data.length === 0) throw new Error('Nie znaleziono adresu: ' + address);
+  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
 }
 
-document.getElementById('go').addEventListener('click', async () => {
-  const depot = document.getElementById('depot').value.trim() || null;
-  const addresses = document.getElementById('addresses').value.split('\n').map(s => s.trim()).filter(Boolean);
-  const returnToDepot = document.getElementById('returnToDepot').checked;
+// Dodanie adresów z textarea
+document.getElementById('add-address').addEventListener('click', async () => {
+  const textarea = document.getElementById('addresses');
+  const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
+  const list = document.getElementById('address-list');
 
-  if (addresses.length === 0) { alert('Dodaj przynajmniej 1 adres'); return; }
+  for (let line of lines) {
+    try {
+      const coords = await geocode(line);
+      const loc = { address: line, lat: coords.lat, lon: coords.lon, isDepot:false };
+      locations.push(loc);
 
-  document.getElementById('result').innerText = 'Optymalizuję...';
-
-  try {
-    const res = await fetch('/optimize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ depot, addresses, returnToDepot })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Błąd serwera');
-
-    const resultDiv = document.getElementById('result');
-    const km = (data.totalMeters / 1000).toFixed(2); // konwersja na km, 2 miejsca po przecinku
-resultDiv.innerHTML = `<b>Całkowita odległość:</b> ${km} km<br/><b>Metoda:</b> ${data.method}<br/><br/>`;
-    const ol = document.createElement('ol');
-    data.ordered.forEach(p => {
       const li = document.createElement('li');
-      li.innerText = `${p.address} (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})${p.isDepot ? ' — depo' : ''}`;
-      ol.appendChild(li);
-    });
-    resultDiv.appendChild(ol);
-
-    // rysowanie trasy drogowej
-    if (routeLayer) map.removeLayer(routeLayer);
-
-    let fullLatLngs = [];
-    for (let i = 0; i < data.ordered.length - 1; i++) {
-      const segment = await getRouteSegment(data.ordered[i], data.ordered[i+1]);
-      fullLatLngs = fullLatLngs.concat(segment);
+      li.textContent = line;
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Usuń';
+      delBtn.style.marginLeft='6px';
+      delBtn.onclick = () => {
+        locations = locations.filter(l => l !== loc);
+        li.remove();
+        drawRoute();
+      };
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    } catch(e) {
+      alert(e.message);
     }
-
-    routeLayer = L.polyline(fullLatLngs, { color: 'blue', weight: 4 }).addTo(map);
-
-// markery z numerami w kolejności
-const markers = [];
-data.ordered.forEach((p, i) => {
-  const m = L.marker([p.lat, p.lon], {
-    icon: L.divIcon({
-      className: 'custom-div-icon',
-      html: `<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i+1}</div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    })
-  }).bindPopup(`${i+1}. ${p.address}${p.isDepot ? ' — depo' : ''}`);
-  m.addTo(map);
-  markers.push(m);
-});
-
-    const group = L.featureGroup([routeLayer, ...markers]);
-    map.fitBounds(group.getBounds().pad(0.2));
-
-  } catch (err) {
-    document.getElementById('result').innerText = 'Błąd: ' + err.message;
   }
+  textarea.value = '';
 });
-</script>
+
+// Pobranie współrzędnych depo
+async function getDepot() {
+  const depotAddr = document.getElementById('depot').value.trim();
+  if (!depotAddr) return null;
+  try {
+    const coords = await geocode(depotAddr);
+    return { address: depotAddr, lat: coords.lat, lon: coords.lon, isDepot:true };
+  } catch(e) {
+    alert(e.message);
+    return null;
+  }
+}
+
+// Rysowanie trasy
+async function drawRoute() {
+  if (routeLayer) map.removeLayer(routeLayer);
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+
+  if (locations.length === 0) return;
+
+  let pts = [...locations];
+  const returnDepot = document.getElementById('returnDepot').checked;
+  let depot = await getDepot();
+  if (depot) {
+    pts.unshift(depot);
+    if (returnDepot) pts.push(depot);
+  }
+
+  let fullLatLngs = [];
+  for (let i=0; i<pts.length-1; i++) {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${pts[i].lon},${pts[i].lat};${pts[i+1].lon},${pts[i+1].lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let segment = [[pts[i].lat, pts[i].lon], [pts[i+1].lat, pts[i+1].lon]];
+      if (data.routes && data.routes.length>0)
+        segment = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+      fullLatLngs = fullLatLngs.concat(segment);
+    } catch {
+      fullLatLngs.push([pts[i].lat, pts[i].lon],[pts[i+1].lat, pts[i+1].lon]);
+    }
+  }
+
+  routeLayer = L.polyline(fullLatLngs, {color:'blue', weight:4}).addTo(map);
+
+  // markery numerowane
+  pts.forEach((p,i)=>{
+    const m = L.marker([p.lat,p.lon],{
+      icon:L.divIcon({
+        className:'custom-div-icon',
+        html:`<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i+1}</div>`,
+        iconSize:[24,24], iconAnchor:[12,12]
+      })
+    }).bindPopup(`${i+1}. ${p.address}${p.isDepot?' — depo':''}`);
+    m.addTo(map);
+    markers.push(m);
+  });
+
+  const group = L.featureGroup([routeLayer,...markers]);
+  map.fitBounds(group.getBounds().pad(0.2));
+
+  // obliczenie dystansu w km (proste przybliżenie)
+  let totalMeters = 0;
+  for (let i=0;i<pts.length-1;i++) {
+    const R=6371000; // radius Earth
+    const dLat=(pts[i+1].lat-pts[i].lat)*Math.PI/180;
+    const dLon=(pts[i+1].lon-pts[i].lon)*Math.PI/180;
+    const lat1=pts[i].lat*Math.PI/180;
+    const lat2=pts[i+1].lat*Math.PI/180;
+    const a=Math.sin(dLat/2)**2+Math.sin(dLon/2)**2*Math.cos(lat1)*Math.cos(lat2);
+    const c=2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    totalMeters+=R*c;
+  }
+  document.getElementById('result').innerHTML=`<b>Całkowita odległość:</b> ${(totalMeters/1000).toFixed(2)} km`;
+}
+
+document.getElementById('optimize').addEventListener('click', drawRoute);
+  </script>
 </body>
 </html>
