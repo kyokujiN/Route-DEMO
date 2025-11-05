@@ -27,7 +27,7 @@
 <body>
   <div id="left">
     <h3>Route Optimizer — demo</h3>
-    <p class="small">Wpisz adresy po jednym w wierszu. Depot jest ustawiony domyślnie na Haugesund.</p>
+    <p class="small">Wpisz adresy po jednym w wierszu. Depot jest ustawione domyślnie na Haugesund.</p>
 
     <label>Depot / start:</label>
     <input type="text" id="depot" value="Industrigata 14B, Haugesund" />
@@ -41,9 +41,6 @@
     <label class="checkbox-inline"><input type="checkbox" id="returnDepot">Powrót do depo</label>
 
     <button id="optimize">Optymalizuj trasę</button>
-
-    <h4>Wynik:</h4>
-    <div id="result"></div>
 
     <h4>Trasa:</h4>
     <ol id="route-list"></ol>
@@ -205,19 +202,14 @@ async function drawRoute(){
   const group = L.featureGroup([routeLayer,...markers]);
   map.fitBounds(group.getBounds().pad(0.2));
 
-  // Całkowita odległość
-  let totalMeters=0;
+  // Wyświetlanie listy trasy bez kilometrów
   let routeList = document.getElementById('route-list');
-  routeList.innerHTML = ''; // Czyszczenie poprzednich danych
-
+  routeList.innerHTML = '';
   for(let i=0;i<route.length-1;i++){
-    totalMeters += distance(route[i], route[i+1]);
     let li = document.createElement('li');
-    li.textContent = `${i+1}. ${route[i].address} → ${route[i+1].address} (${(distance(route[i], route[i+1])/1000).toFixed(2)} km)`;
+    li.textContent = `${i+1}. ${route[i].address} → ${route[i+1].address}`;
     routeList.appendChild(li);
   }
-
-  document.getElementById('result').innerHTML=`<b>Całkowita odległość:</b> ${(totalMeters/1000).toFixed(2)} km`;
 }
 
 document.getElementById('optimize').addEventListener('click', drawRoute);
