@@ -1,82 +1,96 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Route Optimizer</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="utf-8" />
+  <title>Route Optimizer — demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    .container {
-      display: flex;
-      height: 100vh;
-      flex-wrap: wrap;
-    }
-    #address-form-container {
-      width: 300px;
-      padding: 20px;
-      background-color: #f7f7f7;
-      box-sizing: border-box;
-    }
-    #map {
-      flex: 1;
-      height: 100vh;
-    }
-    #address-list {
-      margin-top: 20px;
-    }
-    #optimize-btn {
-      margin-top: 10px;
-    }
-    @media (max-width: 768px) {
-      .container {
-        flex-direction: column;
-      }
-      #address-form-container {
-        width: 100%;
-      }
-      #map {
-        height: 400px;
-      }
-    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; display:flex; height:100vh; }
+    #left { width: 380px; padding: 12px; box-sizing:border-box; overflow:auto; border-right:1px solid #ddd; }
+    #map { flex:1; }
+    textarea { width:100%; height:160px; }
+    button { padding:10px 14px; margin-top:8px; }
+    .small { font-size: 13px; color:#555; }
+    ol { padding-left: 18px; }
   </style>
 </head>
 <body>
+  <div id="left">
+    <h3>Route Optimizer — demo</h3>
+    <p class="small">Wklej po jednym adresie w wierszu. (Dla testów używamy darmowego geokodera Nominatim.)</p>
 
-  <div class="container">
-    <div id="address-form-container">
-      <h3>Address Form</h3>
-      <div class="address-form">
-        <input type="text" id="address-input" placeholder="Enter address" />
-        <button id="add-address-btn">Add Address</button>
-      </div>
-      <div id="address-list"></div>
-      <button id="optimize-btn" style="display:none;">Optimize Route</button>
-      <div id="route-details">
-        <h3>Route Details</h3>
-        <p>Total Distance: <span id="total-distance">0 km</span></p>
-      </div>
-    </div>
+    <label>Depo / start (opcjonalnie):</label><br/>
+    <input id="depot" style="width:100%" placeholder="np. Rynek Główny, Kraków"/><br/><br/>
 
-    <div id="map"></div>
+    <label>Adresy (po jednym w wierszu):</label><br/>
+    <textarea id="addresses" placeholder="ul. Piękna 1, Warszawa\nul. Zielona 2, Warszawa"></textarea><br/>
+
+    <label><input type="checkbox" id="returnToDepot" /> Powrót do depo (jeśli podano)</label><br/>
+
+    <button id="go">Optymalizuj trasę</button>
+
+    <h4>Wynik:</h4>
+    <div id="result"></div>
   </div>
+  <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // Inicjalizacja mapy, centrowanej na Haugesund
-    const map = L.map('map').setView([59.4139, 5.2689], 13);  // Center map on Haugesund
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    const map = L.map('map').setView([52.2297,21.0122], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OSM'
+    }).addTo(map);
 
-    const depotAddress = "Industrigata 14B, Haugesund";
-    const depotCoordinates = [59.4139, 5.2689]; // Współrzędne depozytu
-    let addresses = [];
-    let markers = [];
+    let routeLayer;
 
-    // Dodanie markera dla depozytu
-    const depotMarker = L.marker(depotCoordinates).addTo(map);
-    depotMarker.bindPopup("Depot: " + depotAddress).openPopup();
+    document.getElementById('go').addEventListener('click', async () => {
+      const depot = document.getElementById('depot').value.trim() || null;
+      const addresses = document.getElementById('addresses').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const returnToDepot = document.getElementById('returnToDepot').checked;
 
-    // Funkcja geokodująca adresy
-    async function geocodeAddress(address) {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`);
-      const data = await response.json();
-      if (data && data.length >
+      if (addresses.length === 0) { alert('Dodaj przynajmniej 1 adres'); return; }
+
+      document.getElementById('result').innerText = 'Optymalizuję...';
+
+      try {
+        const res = await fetch('/optimize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ depot, addresses, returnToDepot })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Błąd serwera');
+
+        // wyświetl wynik
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerHTML = `<b>Całkowita odległość (przybliżona):</b> ${data.totalMeters} m<br/><b>Metoda:</b> ${data.method}<br/><br/>`;
+        const ol = document.createElement('ol');
+        data.ordered.forEach(p => {
+          const li = document.createElement('li');
+          li.innerText = `${p.address} (${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})${p.isDepot ? ' — depo' : ''}`;
+          ol.appendChild(li);
+        });
+        resultDiv.appendChild(ol);
+
+        // rysuj trasę na mapie
+        if (routeLayer) map.removeLayer(routeLayer);
+        const latlngs = data.ordered.map(p => [p.lat, p.lon]);
+        routeLayer = L.polyline(latlngs, { weight: 4 }).addTo(map);
+        // markers
+        const markers = [];
+        data.ordered.forEach((p, i) => {
+          const m = L.marker([p.lat, p.lon]).bindPopup(`${i+1}. ${p.address}`);
+          m.addTo(map);
+          markers.push(m);
+        });
+        const group = L.featureGroup([routeLayer, ...markers]);
+        map.fitBounds(group.getBounds().pad(0.2));
+      } catch (err) {
+        document.getElementById('result').innerText = 'Błąd: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
