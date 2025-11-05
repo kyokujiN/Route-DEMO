@@ -116,7 +116,7 @@ async function drawRoute() {
   const returnDepot = document.getElementById('returnDepot').checked;
   let depot = await getDepot();
   if (depot) {
-    pts.unshift(depot);
+    pts.unshift(depot); // depo pierwszy
     if (returnDepot) pts.push(depot);
   }
 
@@ -137,15 +137,24 @@ async function drawRoute() {
 
   routeLayer = L.polyline(fullLatLngs, {color:'blue', weight:4}).addTo(map);
 
-  // markery numerowane
+  // Markery: depo jako domek, reszta numerowana
   pts.forEach((p,i)=>{
-    const m = L.marker([p.lat,p.lon],{
-      icon:L.divIcon({
+    let icon;
+    if (p.isDepot) {
+      icon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/25/25694.png',
+        iconSize: [32,32],
+        iconAnchor: [16,32]
+      });
+    } else {
+      icon = L.divIcon({
         className:'custom-div-icon',
-        html:`<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i+1}</div>`,
+        html:`<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i}</div>`,
         iconSize:[24,24], iconAnchor:[12,12]
-      })
-    }).bindPopup(`${i+1}. ${p.address}${p.isDepot?' — depo':''}`);
+      });
+    }
+    const m = L.marker([p.lat,p.lon],{icon:icon})
+      .bindPopup(`${p.isDepot?'Depo':i}. ${p.address}`);
     m.addTo(map);
     markers.push(m);
   });
@@ -153,10 +162,10 @@ async function drawRoute() {
   const group = L.featureGroup([routeLayer,...markers]);
   map.fitBounds(group.getBounds().pad(0.2));
 
-  // obliczenie dystansu w km (proste przybliżenie)
+  // obliczenie dystansu w km
   let totalMeters = 0;
-  for (let i=0;i<pts.length-1;i++) {
-    const R=6371000; // radius Earth
+  for (let i=0;i<pts.length-1;i++){
+    const R=6371000;
     const dLat=(pts[i+1].lat-pts[i].lat)*Math.PI/180;
     const dLon=(pts[i+1].lon-pts[i].lon)*Math.PI/180;
     const lat1=pts[i].lat*Math.PI/180;
