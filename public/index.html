@@ -10,6 +10,7 @@
     .container {
       display: flex; /* Flexbox, żeby elementy były obok siebie */
       height: 100vh; /* Cała wysokość ekranu */
+      flex-wrap: wrap; /* Pozwala na zawijanie elementów na małych ekranach */
     }
 
     /* Styl formularza po lewej stronie */
@@ -18,6 +19,7 @@
       padding: 20px;
       overflow-y: auto; /* Możliwość przewijania, gdy formularz będzie długi */
       background-color: #f7f7f7; /* Jasne tło dla formularza */
+      box-sizing: border-box;
     }
 
     /* Styl mapy po prawej stronie */
@@ -42,6 +44,29 @@
     /* Styl przycisku do optymalizacji */
     #optimize-btn {
       margin-top: 10px;
+    }
+
+    /* Responsywność: na urządzeniach mobilnych formularz będzie nad mapą */
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column; /* Zawijamy formularz nad mapę */
+      }
+
+      #address-form-container {
+        width: 100%; /* Formularz zajmie całą szerokość ekranu */
+        height: auto; /* Dostosowanie wysokości */
+      }
+
+      #map {
+        height: 400px; /* Zmniejszamy wysokość mapy na urządzeniach mobilnych */
+      }
+    }
+
+    /* Mniejsze dostosowanie na naprawdę małych ekranach */
+    @media (max-width: 480px) {
+      #map {
+        height: 300px; /* Jeszcze mniejsza mapa na bardzo małych ekranach */
+      }
     }
   </style>
 </head>
