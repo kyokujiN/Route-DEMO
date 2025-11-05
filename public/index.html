@@ -152,10 +152,15 @@ function optimizeRoute(points) {
   while (remaining.length > 0) {
     let last = route[route.length - 1];
     let nearestIndex = 0;
-    let minDist = distance(last, remaining[0]);
-    for (let i = 1; i < remaining.length; i++) {
-      let d = distance(last, remaining[i]);
-      if (d < minDist) { minDist = d; nearestIndex = i; }
+    let minDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      let d = getRouteDistance(last, remaining[i]);
+      d.then(distance => {
+        if (distance < minDist) {
+          minDist = distance;
+          nearestIndex = i;
+        }
+      });
     }
     route.push(remaining.splice(nearestIndex, 1)[0]);
   }
