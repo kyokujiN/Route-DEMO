@@ -1,1 +1,60 @@
-<html><body>placeholder frontend</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Route Optimizer</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 600px; width: 100%; }
+    #route-details { padding: 10px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="route-details">
+    <h3>Route Details</h3>
+    <p>Total Distance: <span id="total-distance">0 km</span></p>
+    <button id="optimize-btn">Optimize Route</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([59.4139, 5.2689], 13);  // Center map on Haugesund
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    const depotAddress = "Industrigata 14B, Haugesund";
+
+    // Add a marker for the depot
+    const depotMarker = L.marker([59.4139, 5.2689]).addTo(map);
+    depotMarker.bindPopup("Depot: " + depotAddress).openPopup();
+
+    document.getElementById('optimize-btn').addEventListener('click', async () => {
+      const addresses = ["Address 1", "Address 2", "Address 3"];  // Add your addresses here
+      const response = await fetch('/optimize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses })
+      });
+      const data = await response.json();
+
+      const route = data.route;
+      const totalDistance = data.totalDistanceMeters / 1000;  // Convert meters to kilometers
+
+      // Update the route details section
+      document.getElementById('total-distance').textContent = totalDistance.toFixed(2) + " km";
+
+      // Add markers and polyline for the optimized route
+      let latLngs = [];
+      route.forEach((loc, index) => {
+        latLngs.push([parseFloat(loc.lat), parseFloat(loc.lon)]);
+        L.marker([loc.lat, loc.lon]).addTo(map)
+          .bindPopup(`Stop ${index + 1}: ${loc.address}`);
+      });
+
+      // Draw polyline on the map
+      L.polyline(latLngs, { color: 'blue' }).addTo(map);
+    });
+  </script>
+</body>
+</html>
