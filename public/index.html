@@ -72,7 +72,8 @@ document.getElementById('go').addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.error || 'Błąd serwera');
 
     const resultDiv = document.getElementById('result');
-    resultDiv.innerHTML = `<b>Całkowita odległość (metry drogowe):</b> ${data.totalMeters} m<br/><b>Metoda:</b> ${data.method}<br/><br/>`;
+    const km = (data.totalMeters / 1000).toFixed(2); // konwersja na km, 2 miejsca po przecinku
+resultDiv.innerHTML = `<b>Całkowita odległość:</b> ${km} km<br/><b>Metoda:</b> ${data.method}<br/><br/>`;
     const ol = document.createElement('ol');
     data.ordered.forEach(p => {
       const li = document.createElement('li');
