@@ -65,11 +65,19 @@ let locations = []; // {address, lat, lon, isDepot}
 
 // Geokodowanie adresu przez Nominatim
 async function geocode(address) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'RouteDemo/1.0' } });
-  const data = await res.json();
-  if (data.length === 0) throw new Error('Nie znaleziono adresu: ' + address);
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  try {
+    console.log(`Geokodowanie: ${address}`);
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'RouteDemo/1.0' } });
+    const data = await res.json();
+    if (data.length === 0) throw new Error('Nie znaleziono adresu: ' + address);
+    console.log(`Adres geokodowany: ${address} → Lat: ${data[0].lat}, Lon: ${data[0].lon}`);
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  } catch (e) {
+    console.error(e);
+    alert(`Błąd geokodowania: ${e.message}`);
+    return null;
+  }
 }
 
 // Dodawanie adresów z textarea
@@ -77,26 +85,29 @@ document.getElementById('add-address').addEventListener('click', async () => {
   const textarea = document.getElementById('addresses');
   const lines = textarea.value.split('\n').map(l => l.trim()).filter(Boolean);
   const list = document.getElementById('address-list');
+  console.log('Dodawanie adresów:', lines);
 
   for (let line of lines) {
     try {
       const coords = await geocode(line);
-      const loc = { address: line, lat: coords.lat, lon: coords.lon, isDepot:false };
-      locations.push(loc);
+      if (coords) {
+        const loc = { address: line, lat: coords.lat, lon: coords.lon, isDepot: false };
+        locations.push(loc);
 
-      const li = document.createElement('li');
-      li.textContent = line;
-      const delBtn = document.createElement('button');
-      delBtn.textContent = 'Usuń';
-      delBtn.style.marginLeft='6px';
-      delBtn.onclick = () => {
-        locations = locations.filter(l => l !== loc);
-        li.remove();
-        drawRoute();
-      };
-      li.appendChild(delBtn);
-      list.appendChild(li);
-    } catch(e) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Usuń';
+        delBtn.style.marginLeft = '6px';
+        delBtn.onclick = () => {
+          locations = locations.filter(l => l !== loc);
+          li.remove();
+          drawRoute();
+        };
+        li.appendChild(delBtn);
+        list.appendChild(li);
+      }
+    } catch (e) {
       alert(e.message);
     }
   }
@@ -108,9 +119,10 @@ async function getDepot() {
   const depotAddr = document.getElementById('depot').value.trim();
   if (!depotAddr) return null;
   try {
+    console.log(`Geokodowanie depo: ${depotAddr}`);
     const coords = await geocode(depotAddr);
-    return { address: depotAddr, lat: coords.lat, lon: coords.lon, isDepot:true };
-  } catch(e) {
+    return { address: depotAddr, lat: coords.lat, lon: coords.lon, isDepot: true };
+  } catch (e) {
     alert(e.message);
     return null;
   }
@@ -118,13 +130,16 @@ async function getDepot() {
 
 // Funkcja do obliczania odległości na trasie
 async function getRouteDistance(p1, p2) {
+  console.log(`Obliczanie odległości: ${p1.address} → ${p2.address}`);
   const url = `https://router.project-osrm.org/route/v1/driving/${p1.lon},${p1.lat};${p2.lon},${p2.lat}?overview=full&geometries=geojson`;
   const res = await fetch(url);
   const data = await res.json();
   if (data.routes && data.routes.length > 0) {
     const distance = data.routes[0].legs[0].distance; // Odległość w metrach
+    console.log(`Odległość: ${(distance / 1000).toFixed(2)} km`);
     return distance;
   } else {
+    console.error('Błąd obliczeń trasy');
     return 0; // Jeśli trasa nie jest dostępna
   }
 }
@@ -149,22 +164,24 @@ function optimizeRoute(points) {
 
 // Rysowanie trasy i markerów
 async function drawRoute() {
+  console.log('Rysowanie trasy...');
   if (routeLayer) map.removeLayer(routeLayer);
   markers.forEach(m => map.removeLayer(m));
   markers = [];
 
-  if (locations.length === 0) return;
+  if (locations.length === 0) {
+    console.log('Brak adresów do optymalizacji');
+    return;
+  }
 
   const depot = await getDepot();
   if (!depot) return;
   let returnDepot = document.getElementById('returnDepot').checked;
 
-  // Tworzenie trasy
   let points = [depot, ...locations];
   let route = optimizeRoute(points);
   if (returnDepot) route.push(depot);
 
-  // Rysowanie trasy OSRM z fallbackiem
   let fullLatLngs = [];
   for (let i = 0; i < route.length - 1; i++) {
     try {
