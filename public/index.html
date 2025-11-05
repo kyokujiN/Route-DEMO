@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 0; display:flex; height:100vh; flex-direction: row; }
-    #left { width: 380px; padding: 12px; box-sizing:border-box; overflow:auto; border-right:1px solid #ddd; flex-shrink:0; }
-    #map { flex:1; min-height:100%; }
+    #left { width: 380px; padding: 12px; box-sizing:border-box; overflow:auto; border-right:1px solid #ddd; }
+    #map { flex:1; }
     input, textarea { width:100%; margin-top:4px; margin-bottom:8px; box-sizing:border-box; padding:6px; }
     button { padding:8px 12px; margin-top:4px; }
     .small { font-size: 13px; color:#555; }
@@ -19,7 +19,7 @@
     /* Responsywność dla telefonów */
     @media (max-width: 768px) {
       body { flex-direction: column; }
-      #left { width: 100%; border-right: none; border-bottom:1px solid #ddd; max-height:40vh; overflow:auto; }
+      #left { width: 100%; border-right: none; border-bottom:1px solid #ddd; height: auto; }
       #map { height: 60vh; }
     }
   </style>
@@ -89,4 +89,126 @@ document.getElementById('add-address').addEventListener('click', async () => {
       delBtn.onclick = () => {
         locations = locations.filter(l => l !== loc);
         li.remove();
-        drawRoute
+        drawRoute();
+      };
+      li.appendChild(delBtn);
+      list.appendChild(li);
+    } catch(e) {
+      alert(e.message);
+    }
+  }
+  textarea.value = '';
+});
+
+// Pobranie depo
+async function getDepot() {
+  const depotAddr = document.getElementById('depot').value.trim();
+  if (!depotAddr) return null;
+  try {
+    const coords = await geocode(depotAddr);
+    return { address: depotAddr, lat: coords.lat, lon: coords.lon, isDepot:true };
+  } catch(e) {
+    alert(e.message);
+    return null;
+  }
+}
+
+// Obliczenie odległości w metrach
+function distance(p1,p2){
+  const R=6371000;
+  const dLat=(p2.lat-p1.lat)*Math.PI/180;
+  const dLon=(p2.lon-p1.lon)*Math.PI/180;
+  const lat1=p1.lat*Math.PI/180;
+  const lat2=p2.lat*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.sin(dLon/2)**2*Math.cos(lat1)*Math.cos(lat2);
+  const c=2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R*c;
+}
+
+// Optymalizacja trasy - Nearest Neighbor
+function optimizeRoute(points) {
+  if(points.length<=1) return points;
+  let remaining = points.slice(1);
+  let route = [points[0]];
+  while(remaining.length>0){
+    let last = route[route.length-1];
+    let nearestIndex = 0;
+    let minDist = distance(last, remaining[0]);
+    for(let i=1;i<remaining.length;i++){
+      let d = distance(last, remaining[i]);
+      if(d<minDist){ minDist=d; nearestIndex=i;}
+    }
+    route.push(remaining.splice(nearestIndex,1)[0]);
+  }
+  return route;
+}
+
+// Rysowanie trasy i markerów
+async function drawRoute(){
+  if(routeLayer) map.removeLayer(routeLayer);
+  markers.forEach(m => map.removeLayer(m));
+  markers=[];
+
+  if(locations.length===0) return;
+
+  const depot = await getDepot();
+  if(!depot) return;
+  let returnDepot = document.getElementById('returnDepot').checked;
+
+  // Tworzenie trasy
+  let points = [depot, ...locations];
+  let route = optimizeRoute(points);
+  if(returnDepot) route.push(depot);
+
+  // Rysowanie trasy OSRM z fallbackiem
+  let fullLatLngs=[];
+  for(let i=0;i<route.length-1;i++){
+    try{
+      const url = `https://router.project-osrm.org/route/v1/driving/${route[i].lon},${route[i].lat};${route[i+1].lon},${route[i+1].lat}?overview=full&geometries=geojson`;
+      const res = await fetch(url);
+      const data = await res.json();
+      let segment = [[route[i].lat, route[i].lon],[route[i+1].lat,route[i+1].lon]];
+      if(data.routes && data.routes.length>0) segment = data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
+      fullLatLngs = fullLatLngs.concat(segment);
+    }catch{
+      fullLatLngs.push([route[i].lat, route[i].lon],[route[i+1].lat,route[i+1].lon]);
+    }
+  }
+
+  routeLayer = L.polyline(fullLatLngs,{color:'blue',weight:4}).addTo(map);
+
+  // Markery - depo jako domek, reszta numerowane
+  route.forEach((p,i)=>{
+    let icon;
+    if(p.isDepot){
+      icon = L.icon({
+        iconUrl:'https://cdn-icons-png.flaticon.com/512/25/25694.png',
+        iconSize:[32,32],
+        iconAnchor:[16,32]
+      });
+    } else {
+      icon = L.divIcon({
+        className:'custom-div-icon',
+        html:`<div style="background-color:blue;color:white;border-radius:50%;width:24px;height:24px;text-align:center;line-height:24px;font-weight:bold;">${i}</div>`,
+        iconSize:[24,24],
+        iconAnchor:[12,12]
+      });
+    }
+    const m = L.marker([p.lat,p.lon],{icon:icon}).bindPopup(`${p.isDepot?'Depo':i}. ${p.address}`);
+    m.addTo(map);
+    markers.push(m);
+  });
+
+  const group = L.featureGroup([routeLayer,...markers]);
+  map.fitBounds(group.getBounds().pad(0.2));
+
+  // Całkowita odległość
+  let totalMeters=0;
+  for(let i=0;i<route.length-1;i++) totalMeters+=distance(route[i],route[i+1]);
+  document.getElementById('result').innerHTML=`<b>Całkowita odległość:</b> ${(totalMeters/1000).toFixed(2)} km`;
+}
+
+document.getElementById('optimize').addEventListener('click', drawRoute);
+  </script>
+</body>
+</html>
