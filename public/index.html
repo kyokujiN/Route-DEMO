@@ -6,39 +6,88 @@
   <title>Route Optimizer</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
-    #map { height: 600px; width: 100%; }
-    #route-details { padding: 10px; }
-    .address-form { margin-bottom: 15px; }
-    #address-list { margin-top: 20px; }
+    /* Ustawienia kontenera, który będzie trzymał formularz po lewej i mapę po prawej */
+    .container {
+      display: flex; /* Flexbox, żeby elementy były obok siebie */
+      height: 100vh; /* Cała wysokość ekranu */
+    }
+
+    /* Styl formularza po lewej stronie */
+    #address-form-container {
+      width: 300px; /* Szerokość formularza (możesz dostosować) */
+      padding: 20px;
+      overflow-y: auto; /* Możliwość przewijania, gdy formularz będzie długi */
+      background-color: #f7f7f7; /* Jasne tło dla formularza */
+    }
+
+    /* Styl mapy po prawej stronie */
+    #map {
+      flex: 1; /* Mapa będzie wypełniać resztę ekranu */
+      height: 100vh; /* Mapa zajmie całą wysokość ekranu */
+    }
+
+    /* Dodatkowy styl dla sekcji trasy */
+    #route-details {
+      padding: 10px;
+    }
+
+    .address-form {
+      margin-bottom: 15px;
+    }
+
+    #address-list {
+      margin-top: 20px;
+    }
+
+    /* Styl przycisku do optymalizacji */
+    #optimize-btn {
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
 
-  <div id="route-details">
-    <h3>Route Details</h3>
-    <p>Total Distance: <span id="total-distance">0 km</span></p>
-    <div class="address-form">
-      <input type="text" id="address-input" placeholder="Enter address" />
-      <button id="add-address-btn">Add Address</button>
+  <!-- Kontener z flexboxem, gdzie formularz jest po lewej, a mapa po prawej -->
+  <div class="container">
+    <div id="address-form-container">
+      <h3>Address Form</h3>
+
+      <!-- Formularz do dodawania adresów -->
+      <div class="address-form">
+        <input type="text" id="address-input" placeholder="Enter address" />
+        <button id="add-address-btn">Add Address</button>
+      </div>
+
+      <!-- Lista dodanych adresów -->
+      <div id="address-list"></div>
+
+      <!-- Przycisk do optymalizacji trasy -->
+      <button id="optimize-btn" style="display:none;">Optimize Route</button>
+
+      <div id="route-details">
+        <h3>Route Details</h3>
+        <p>Total Distance: <span id="total-distance">0 km</span></p>
+      </div>
     </div>
-    <div id="address-list"></div>
-    <button id="optimize-btn" style="display:none;">Optimize Route</button>
+
+    <!-- Mapa po prawej stronie -->
+    <div id="map"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
+    // Inicjalizacja mapy, centrowanej na Haugesund
     const map = L.map('map').setView([59.4139, 5.2689], 13);  // Center map on Haugesund
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     const depotAddress = "Industrigata 14B, Haugesund";
     let addresses = [];
 
-    // Add a marker for the depot
+    // Dodanie markera dla depozytu
     const depotMarker = L.marker([59.4139, 5.2689]).addTo(map);
     depotMarker.bindPopup("Depot: " + depotAddress).openPopup();
 
-    // Handle adding new addresses
+    // Obsługa dodawania nowych adresów
     document.getElementById('add-address-btn').addEventListener('click', () => {
       const addressInput = document.getElementById('address-input');
       const newAddress = addressInput.value.trim();
@@ -46,23 +95,23 @@
       if (newAddress) {
         addresses.push(newAddress);
 
-        // Update the address list on the page
+        // Zaktualizowanie listy adresów na stronie
         const addressListDiv = document.getElementById('address-list');
         const addressDiv = document.createElement('div');
         addressDiv.textContent = newAddress;
         addressListDiv.appendChild(addressDiv);
 
-        // Clear the input field
+        // Wyczyść pole tekstowe
         addressInput.value = '';
 
-        // Show the "Optimize Route" button if at least one address has been added
+        // Pokazanie przycisku do optymalizacji, jeśli dodano co najmniej jeden adres
         if (addresses.length > 0) {
           document.getElementById('optimize-btn').style.display = 'block';
         }
       }
     });
 
-    // Optimize the route when button is clicked
+    // Optymalizacja trasy po kliknięciu przycisku
     document.getElementById('optimize-btn').addEventListener('click', async () => {
       const response = await fetch('/optimize', {
         method: 'POST',
@@ -72,12 +121,12 @@
       const data = await response.json();
 
       const route = data.route;
-      const totalDistance = data.totalDistanceMeters / 1000;  // Convert meters to kilometers
+      const totalDistance = data.totalDistanceMeters / 1000;  // Konwersja metrów na kilometry
 
-      // Update the route details section
+      // Zaktualizowanie informacji o trasie
       document.getElementById('total-distance').textContent = totalDistance.toFixed(2) + " km";
 
-      // Add markers and polyline for the optimized route
+      // Dodanie markerów i linii dla zoptymalizowanej trasy
       let latLngs = [];
       route.forEach((loc, index) => {
         latLngs.push([parseFloat(loc.lat), parseFloat(loc.lon)]);
@@ -85,7 +134,7 @@
           .bindPopup(`Stop ${index + 1}: ${loc.address}`);
       });
 
-      // Draw polyline on the map
+      // Narysowanie linii na mapie
       L.polyline(latLngs, { color: 'blue' }).addTo(map);
     });
   </script>
