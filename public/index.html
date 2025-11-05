@@ -8,14 +8,22 @@
   <style>
     #map { height: 600px; width: 100%; }
     #route-details { padding: 10px; }
+    .address-form { margin-bottom: 15px; }
+    #address-list { margin-top: 20px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+
   <div id="route-details">
     <h3>Route Details</h3>
     <p>Total Distance: <span id="total-distance">0 km</span></p>
-    <button id="optimize-btn">Optimize Route</button>
+    <div class="address-form">
+      <input type="text" id="address-input" placeholder="Enter address" />
+      <button id="add-address-btn">Add Address</button>
+    </div>
+    <div id="address-list"></div>
+    <button id="optimize-btn" style="display:none;">Optimize Route</button>
   </div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -24,13 +32,38 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     const depotAddress = "Industrigata 14B, Haugesund";
+    let addresses = [];
 
     // Add a marker for the depot
     const depotMarker = L.marker([59.4139, 5.2689]).addTo(map);
     depotMarker.bindPopup("Depot: " + depotAddress).openPopup();
 
+    // Handle adding new addresses
+    document.getElementById('add-address-btn').addEventListener('click', () => {
+      const addressInput = document.getElementById('address-input');
+      const newAddress = addressInput.value.trim();
+
+      if (newAddress) {
+        addresses.push(newAddress);
+
+        // Update the address list on the page
+        const addressListDiv = document.getElementById('address-list');
+        const addressDiv = document.createElement('div');
+        addressDiv.textContent = newAddress;
+        addressListDiv.appendChild(addressDiv);
+
+        // Clear the input field
+        addressInput.value = '';
+
+        // Show the "Optimize Route" button if at least one address has been added
+        if (addresses.length > 0) {
+          document.getElementById('optimize-btn').style.display = 'block';
+        }
+      }
+    });
+
+    // Optimize the route when button is clicked
     document.getElementById('optimize-btn').addEventListener('click', async () => {
-      const addresses = ["Address 1", "Address 2", "Address 3"];  // Add your addresses here
       const response = await fetch('/optimize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
